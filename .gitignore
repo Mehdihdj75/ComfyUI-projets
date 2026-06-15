@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+outputs/
+*.mp4
+*.webm
+*.gif
+*.png
+*.safetensors
+*.ckpt
