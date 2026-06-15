@@ -4,8 +4,8 @@
       "command": "npx",
       "args": ["-y", "comfyui-mcp"],
       "env": {
-        "COMFYUI_URL": "https://REMPLACE-PAR-TON-ENDPOINT-RUNCOMFY",
-        "COMFYUI_API_KEY": "REMPLACE-PAR-TA-CLE-RUNCOMFY-SI-APPLICABLE"
+        "COMFYUI_URL": "${COMFYUI_URL}",
+        "COMFYUI_API_KEY": "${COMFYUI_API_KEY}"
       }
     }
   }
