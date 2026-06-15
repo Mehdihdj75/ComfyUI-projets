@@ -67,7 +67,12 @@ workflow["3"]["inputs"]["seed"]  = {{ $json.seed }}
 workflow["10"]["inputs"]["image"] = {{ $json.imageUrl }}   // i2v
 ```
 
-## TODO (à faire une fois l'endpoint RunComfy créé)
-- [ ] Générer le **workflow n8n importable (.json)** prêt à l'emploi (via skill n8n-builder).
+## Workflow importable prêt
+✅ `n8n/comfyui-runcomfy-video.json` — webhook → RunComfy serverless → poll → URL vidéo.
+Import + payload : voir `n8n/README.md`.
+
+## TODO (une fois le deployment_id créé)
+- [x] Générer le **workflow n8n importable (.json)** prêt à l'emploi.
+- [ ] Créer le credential `RunComfy Bearer` + renseigner le `deployment_id`.
 - [ ] Tester end-to-end sur 1 clip WAN 2.2.
 - [ ] Dupliquer le pipeline par projet (Momentum / video-ads-pulse360 / avatar-ia).

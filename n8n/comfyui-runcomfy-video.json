@@ -1,0 +1,251 @@
+{
+  "name": "Génération vidéo ComfyUI via RunComfy → URL vidéo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "comfyui-video",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Réception d'une demande de génération vidéo",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1100, 300],
+      "webhookId": "comfyui-video-hook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construit deployment_id + overrides à partir du payload reçu.\n// Payload attendu : { deployment_id?, prompt?, seed?, image_url?, overrides?, projet? }\nconst body = ($input.first().json.body) || {};\nconst deploymentId = body.deployment_id || 'REMPLACE_PAR_TON_DEPLOYMENT_ID';\n\nlet overrides = body.overrides || {};\nif (!body.overrides) {\n  // ⚠️ Node IDs à adapter à TON workflow déployé (voir le workflow API JSON).\n  if (body.prompt)        overrides['6']  = { inputs: { text: body.prompt } };          // CLIPTextEncode (prompt positif)\n  if (body.seed != null)  overrides['3']  = { inputs: { seed: body.seed } };             // KSampler\n  if (body.image_url)     overrides['10'] = { inputs: { image: body.image_url } };        // LoadImage (image-to-video)\n}\n\nreturn [{ json: {\n  deployment_id: deploymentId,\n  projet: body.projet || 'inconnu',\n  inferenceBody: { overrides }\n} }];"
+      },
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Prépare les paramètres de génération",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.runcomfy.net/prod/v2/deployments/{{ $json.deployment_id }}/inference",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.inferenceBody) }}",
+        "options": {}
+      },
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Soumet le job à RunComfy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-660, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_CREDENTIAL_ID", "name": "RunComfy Bearer" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "s4a", "name": "deployment_id", "type": "string", "value": "={{ $node[\"Prépare les paramètres de génération\"].json.deployment_id }}" },
+            { "id": "s4b", "name": "projet", "type": "string", "value": "={{ $node[\"Prépare les paramètres de génération\"].json.projet }}" },
+            { "id": "s4c", "name": "request_id", "type": "string", "value": "={{ $json.request_id || $json.id || $json.requestId }}" },
+            { "id": "s4d", "name": "attempt", "type": "number", "value": 0 }
+          ]
+        },
+        "options": {}
+      },
+      "id": "44444444-4444-4444-8444-444444444444",
+      "name": "Mémorise le request_id",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-440, 300]
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "55555555-5555-4555-8555-555555555555",
+      "name": "Attend avant de revérifier le statut",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [-220, 300],
+      "webhookId": "comfyui-video-wait"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.runcomfy.net/prod/v2/deployments/{{ $json.deployment_id }}/requests/{{ $json.request_id }}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "66666666-6666-4666-8666-666666666666",
+      "name": "Vérifie le statut du job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [0, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_CREDENTIAL_ID", "name": "RunComfy Bearer" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "s7a", "name": "deployment_id", "type": "string", "value": "={{ $node[\"Attend avant de revérifier le statut\"].json.deployment_id }}" },
+            { "id": "s7b", "name": "request_id", "type": "string", "value": "={{ $node[\"Attend avant de revérifier le statut\"].json.request_id }}" },
+            { "id": "s7c", "name": "projet", "type": "string", "value": "={{ $node[\"Attend avant de revérifier le statut\"].json.projet }}" },
+            { "id": "s7d", "name": "attempt", "type": "number", "value": "={{ $node[\"Attend avant de revérifier le statut\"].json.attempt + 1 }}" },
+            { "id": "s7e", "name": "status", "type": "string", "value": "={{ ($json.status || $json.state || '').toString().toLowerCase() }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "77777777-7777-4777-8777-777777777777",
+      "name": "Évalue le statut du job",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2 },
+          "conditions": [
+            { "id": "c8a", "leftValue": "={{ $json.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } },
+            { "id": "c8b", "leftValue": "={{ $json.status }}", "rightValue": "success", "operator": { "type": "string", "operation": "equals" } },
+            { "id": "c8c", "leftValue": "={{ $json.status }}", "rightValue": "succeeded", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "88888888-8888-4888-8888-888888888888",
+      "name": "Le job est terminé ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose", "version": 2 },
+          "conditions": [
+            { "id": "c9a", "leftValue": "={{ $json.status }}", "rightValue": "failed", "operator": { "type": "string", "operation": "equals" } },
+            { "id": "c9b", "leftValue": "={{ $json.status }}", "rightValue": "error", "operator": { "type": "string", "operation": "equals" } },
+            { "id": "c9c", "leftValue": "={{ $json.status }}", "rightValue": "cancelled", "operator": { "type": "string", "operation": "equals" } },
+            { "id": "c9d", "leftValue": "={{ $json.attempt }}", "rightValue": 60, "operator": { "type": "number", "operation": "gte" } }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "99999999-9999-4999-8999-999999999999",
+      "name": "Le job a échoué ou expiré ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [660, 460]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.runcomfy.net/prod/v2/deployments/{{ $json.deployment_id }}/requests/{{ $json.request_id }}/result",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "name": "Récupère le résultat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 160],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_CREDENTIAL_ID", "name": "RunComfy Bearer" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parcourt le résultat et extrait l'URL de la vidéo (sinon la 1re URL trouvée).\nconst res = $input.first().json || {};\nconst urls = [];\nconst walk = (o) => {\n  if (o && typeof o === 'object') { for (const v of Object.values(o)) walk(v); }\n  else if (typeof o === 'string' && o.startsWith('http')) urls.push(o);\n};\nwalk(res);\nconst vid = urls.find(u => /\\.(mp4|webm|mov|gif)(\\?|$)/i.test(u)) || urls[0] || null;\nreturn [{ json: {\n  videoUrl: vid,\n  allUrls: urls,\n  projet: $node[\"Prépare les paramètres de génération\"].json.projet\n} }];"
+      },
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "name": "Extrait l'URL de la vidéo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 160]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"completed\", \"projet\": $json.projet, \"videoUrl\": $json.videoUrl, \"allUrls\": $json.allUrls } }}",
+        "options": {}
+      },
+      "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "name": "Répond au projet appelant (succès)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1100, 160]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": $json.status, \"projet\": $json.projet, \"request_id\": $json.request_id, \"attempt\": $json.attempt } }}",
+        "options": { "responseCode": 500 }
+      },
+      "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "name": "Répond au projet appelant (échec)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 460]
+    }
+  ],
+  "connections": {
+    "Réception d'une demande de génération vidéo": {
+      "main": [[{ "node": "Prépare les paramètres de génération", "type": "main", "index": 0 }]]
+    },
+    "Prépare les paramètres de génération": {
+      "main": [[{ "node": "Soumet le job à RunComfy", "type": "main", "index": 0 }]]
+    },
+    "Soumet le job à RunComfy": {
+      "main": [[{ "node": "Mémorise le request_id", "type": "main", "index": 0 }]]
+    },
+    "Mémorise le request_id": {
+      "main": [[{ "node": "Attend avant de revérifier le statut", "type": "main", "index": 0 }]]
+    },
+    "Attend avant de revérifier le statut": {
+      "main": [[{ "node": "Vérifie le statut du job", "type": "main", "index": 0 }]]
+    },
+    "Vérifie le statut du job": {
+      "main": [[{ "node": "Évalue le statut du job", "type": "main", "index": 0 }]]
+    },
+    "Évalue le statut du job": {
+      "main": [[{ "node": "Le job est terminé ?", "type": "main", "index": 0 }]]
+    },
+    "Le job est terminé ?": {
+      "main": [
+        [{ "node": "Récupère le résultat", "type": "main", "index": 0 }],
+        [{ "node": "Le job a échoué ou expiré ?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Le job a échoué ou expiré ?": {
+      "main": [
+        [{ "node": "Répond au projet appelant (échec)", "type": "main", "index": 0 }],
+        [{ "node": "Attend avant de revérifier le statut", "type": "main", "index": 0 }]
+      ]
+    },
+    "Récupère le résultat": {
+      "main": [[{ "node": "Extrait l'URL de la vidéo", "type": "main", "index": 0 }]]
+    },
+    "Extrait l'URL de la vidéo": {
+      "main": [[{ "node": "Répond au projet appelant (succès)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "pinData": {},
+  "meta": { "templateId": "comfyui-runcomfy-video" }
+}
